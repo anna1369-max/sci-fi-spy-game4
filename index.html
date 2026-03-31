@@ -1,873 +1,897 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>S.I.A. 科學特務局</title>
-  
-  <!-- 載入 Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- 載入 FontAwesome 圖標庫 (取代容易造成白畫面的 Lucide UMD) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
-  <!-- 載入 React 與 ReactDOM (已移除 crossorigin 以支援本地直接開啟) -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  
-  <!-- 載入 Babel 以便在瀏覽器中解析 JSX -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S.I.A. 科學特務局</title>
+    
+    <!-- 引入 Tailwind CSS 進行快速排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React 與 ReactDOM (版本 18) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel 讓瀏覽器可以解析 JSX 語法 -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- 補足進場動畫的 CSS -->
+    <style>
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideInFromBottom { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        .zoom-in { animation: zoomIn 0.5s ease-out forwards; }
+        .slide-in-from-bottom-2 { animation: slideInFromBottom 0.3s ease-out forwards; }
+        
+        /* 隱藏預設捲軸，讓畫面更有科技感 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
 </head>
-<body class="bg-slate-900">
-  <!-- React 應用的掛載點，加入預設文字避免白畫面 -->
-  <div id="root">
-    <div class="min-h-screen flex items-center justify-center text-teal-500 font-bold text-xl flex-col">
-      <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-4"></i>
-      系統載入中...
-      <span class="text-sm text-slate-500 font-normal mt-2">（如果持續停留在這個畫面，請確認您的網路連線正常）</span>
-    </div>
-  </div>
+<body class="bg-slate-900 text-slate-200 font-sans selection:bg-teal-500 selection:text-white">
 
-  <!-- 應用程式邏輯 -->
-  <script type="text/babel">
-    // 1. 從全域變數中提取 React Hooks
-    const { useState, useRef, useEffect } = React;
+    <!-- React 應用的掛載點 -->
+    <div id="root"></div>
 
-    // ==========================================
-    // 網頁音訊合成器 (雙模式切換：戰情室 x 深度工作)
-    // ==========================================
-    class SciFiBGM {
-      constructor() {
-        this.ctx = null;
-        this.isPlaying = false;
-        this.masterGain = null;
-        this.schedulerTimer = null;
-        this.nextNoteTime = 0;
-        this.currentStep = 0;
-        this.mode = 'WAR_ROOM';
-        this.drones = [];
-        this.warRoomTempo = 115; 
-        this.warRoomSequence = [82.41, 82.41, 98.00, 82.41, 73.42, 82.41, 61.74, 73.42];
-        this.focusTempo = 70; 
-        this.focusSequence = [164.81, 123.47, 196.00, 123.47, 185.00, 123.47, 196.00, 123.47];
-      }
+    <script type="text/babel">
+        // 從全域 React 物件解構所需的 Hooks
+        const { useState, useRef, useEffect } = React;
 
-      init() {
-        if (!this.ctx) {
-          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-      }
-
-      setMode(newMode) {
-        if (this.mode === newMode) return;
-        this.mode = newMode;
-        this.currentStep = 0; 
-        if (this.isPlaying) {
-          this.stopDrones();
-          this.startDrones();
-        }
-      }
-
-      play() {
-        if (this.isPlaying) return;
-        this.init();
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-        this.isPlaying = true;
-
-        this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = 0.15; 
-        this.masterGain.connect(this.ctx.destination);
-
-        this.startDrones(); 
-
-        this.nextNoteTime = this.ctx.currentTime + 0.1;
-        this.currentStep = 0;
-        this.schedule();
-      }
-
-      startDrones() {
-        if (this.mode === 'WAR_ROOM') {
-          const padOsc = this.ctx.createOscillator();
-          padOsc.type = 'sawtooth';
-          padOsc.frequency.value = 41.20; 
-          const padFilter = this.ctx.createBiquadFilter();
-          padFilter.type = 'lowpass';
-          padFilter.frequency.value = 150; 
-          
-          padOsc.connect(padFilter);
-          padFilter.connect(this.masterGain);
-          padOsc.start();
-          this.drones.push(padOsc); 
-
-        } else if (this.mode === 'FOCUS') {
-          const subOsc = this.ctx.createOscillator();
-          subOsc.type = 'triangle';
-          subOsc.frequency.value = 41.20; 
-          const subGain = this.ctx.createGain();
-          subGain.gain.value = 0.3;
-
-          const tensionOsc = this.ctx.createOscillator();
-          tensionOsc.type = 'sine';
-          tensionOsc.frequency.value = 82.41; 
-          const tensionGain = this.ctx.createGain();
-          tensionGain.gain.value = 0.15;
-
-          const lfo = this.ctx.createOscillator();
-          lfo.type = 'sine';
-          lfo.frequency.value = 0.05; 
-          const lfoGain = this.ctx.createGain();
-          lfoGain.gain.value = 0.2; 
-          
-          lfo.connect(lfoGain);
-          lfoGain.connect(subGain.gain);
-          lfoGain.connect(tensionGain.gain);
-
-          subOsc.connect(subGain);
-          tensionOsc.connect(tensionGain);
-          subGain.connect(this.masterGain);
-          tensionGain.connect(this.masterGain);
-
-          subOsc.start();
-          tensionOsc.start();
-          lfo.start();
-          this.drones.push(subOsc, tensionOsc, lfo);
-        }
-      }
-
-      stopDrones() {
-        this.drones.forEach(node => {
-          try { node.stop(); } catch(e){}
-          node.disconnect();
-        });
-        this.drones = [];
-      }
-
-      schedule() {
-        if (!this.isPlaying) return;
-        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
-          this.playNote(this.nextNoteTime);
-          this.nextNote();
-        }
-        this.schedulerTimer = setTimeout(() => this.schedule(), 25);
-      }
-
-      nextNote() {
-        const tempo = this.mode === 'WAR_ROOM' ? this.warRoomTempo : this.focusTempo;
-        const stepInterval = this.mode === 'WAR_ROOM' ? 0.25 : 0.5; 
-        
-        const secondsPerBeat = 60.0 / tempo;
-        this.nextNoteTime += stepInterval * secondsPerBeat;
-        
-        const seqLength = this.mode === 'WAR_ROOM' ? this.warRoomSequence.length : this.focusSequence.length;
-        this.currentStep = (this.currentStep + 1) % seqLength;
-      }
-
-      playNote(time) {
-        if (this.mode === 'WAR_ROOM') {
-          this.playWarRoomNote(time);
-        } else {
-          this.playFocusNote(time);
-        }
-      }
-
-      playWarRoomNote(time) {
-        const bassOsc = this.ctx.createOscillator();
-        bassOsc.type = 'square'; 
-        bassOsc.frequency.value = this.warRoomSequence[this.currentStep % this.warRoomSequence.length];
-
-        const bassFilter = this.ctx.createBiquadFilter();
-        bassFilter.type = 'lowpass';
-        bassFilter.Q.value = 4; 
-        bassFilter.frequency.setValueAtTime(1000, time);
-        bassFilter.frequency.exponentialRampToValueAtTime(80, time + 0.1);
-
-        const bassGain = this.ctx.createGain();
-        bassGain.gain.setValueAtTime(0.4, time);
-        bassGain.gain.exponentialRampToValueAtTime(0.01, time + 0.12);
-
-        bassOsc.connect(bassFilter);
-        bassFilter.connect(bassGain);
-        bassGain.connect(this.masterGain);
-
-        bassOsc.start(time);
-        bassOsc.stop(time + 0.15);
-
-        if (this.currentStep % 4 === 0) {
-          const tickOsc = this.ctx.createOscillator();
-          tickOsc.type = 'sine';
-          tickOsc.frequency.value = 2500; 
-          
-          const tickGain = this.ctx.createGain();
-          tickGain.gain.setValueAtTime(0.06, time);
-          tickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
-
-          tickOsc.connect(tickGain);
-          tickGain.connect(this.masterGain);
-          
-          tickOsc.start(time);
-          tickOsc.stop(time + 0.05);
-        }
-      }
-
-      playFocusNote(time) {
-        const arpOsc = this.ctx.createOscillator();
-        arpOsc.type = 'triangle'; 
-        arpOsc.frequency.value = this.focusSequence[this.currentStep % this.focusSequence.length];
-
-        const arpFilter = this.ctx.createBiquadFilter();
-        arpFilter.type = 'lowpass';
-        arpFilter.frequency.setValueAtTime(600, time); 
-        arpFilter.frequency.exponentialRampToValueAtTime(150, time + 0.3); 
-
-        const arpGain = this.ctx.createGain();
-        arpGain.gain.setValueAtTime(0, time);
-        arpGain.gain.linearRampToValueAtTime(0.15, time + 0.05); 
-        arpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
-
-        arpOsc.connect(arpFilter);
-        arpFilter.connect(arpGain);
-        arpGain.connect(this.masterGain);
-
-        arpOsc.start(time);
-        arpOsc.stop(time + 0.5);
-
-        if (this.currentStep === 0) {
-          const pingOsc = this.ctx.createOscillator();
-          pingOsc.type = 'sine';
-          pingOsc.frequency.value = 1046.50; 
-          
-          const pingGain = this.ctx.createGain();
-          pingGain.gain.setValueAtTime(0.04, time);
-          pingGain.gain.exponentialRampToValueAtTime(0.0001, time + 1.5); 
-
-          pingOsc.connect(pingGain);
-          pingGain.connect(this.masterGain);
-          
-          pingOsc.start(time);
-          pingOsc.stop(time + 1.5);
-        }
-
-        const isDownbeat = (this.currentStep % 2 === 0);
-        const clockOsc = this.ctx.createOscillator();
-        const clockGain = this.ctx.createGain();
-        const clockFilter = this.ctx.createBiquadFilter();
-
-        if (isDownbeat) {
-          clockOsc.type = 'sine';
-          clockOsc.frequency.setValueAtTime(80, time); 
-          clockOsc.frequency.exponentialRampToValueAtTime(20, time + 0.15); 
-          clockGain.gain.setValueAtTime(0.3, time);
-          clockGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-          clockFilter.type = 'lowpass';
-          clockFilter.frequency.value = 150; 
-        } else {
-          clockOsc.type = 'triangle';
-          clockOsc.frequency.value = 1200; 
-          clockGain.gain.setValueAtTime(0.015, time); 
-          clockGain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
-          clockFilter.type = 'highpass';
-          clockFilter.frequency.value = 1500; 
-        }
-
-        clockOsc.connect(clockFilter);
-        clockFilter.connect(clockGain);
-        clockGain.connect(this.masterGain);
-
-        clockOsc.start(time);
-        clockOsc.stop(time + 0.15);
-      }
-
-      stop() {
-        this.isPlaying = false;
-        clearTimeout(this.schedulerTimer);
-        this.stopDrones();
-        if (this.masterGain) {
-          this.masterGain.disconnect();
-        }
-      }
-    }
-
-    // ==========================================
-    // 題庫系統 
-    // ==========================================
-    const POOL_TYPE_1 = [
-      {
-        storyId: 't1_s1',
-        title: "任務一：呢喃森林的枯萎之謎",
-        description: "見習特務，森林裡會發光的奇異真菌突然大面積枯萎，水源看似正常，但附近新建了一座重工業廠。請找出原因。",
-        variations: [
-          {
-            vId: 'v1',
-            questions: [
-              { dimension: 'observation', text: "現場的樹葉上有一層灰色的粉末。請選出一個最適合的「可驗證科學問題」：", options: ["真菌枯萎的樣子是不是很可憐？", "工廠排放的粉塵是否會遮蔽真菌吸收的光線？", "為什麼最近森林的風景變醜了？"], correctAnswer: 1, hint: "科學問題必須是可以透過實驗來測量或觀察的客觀現象喔！" },
-              { dimension: 'hypothesis', text: "承上題，請提出你的「科學假設」：", options: ["如果葉片上的粉塵越厚，真菌的存活率就會越低。", "我覺得真菌是因為心情不好才枯萎的。", "工廠廢氣會讓真菌變成紅色。"], correctAnswer: 0, hint: "假設必須是針對問題的一種預測，通常具有「如果...就...」的因果關係。" }
-            ]
-          },
-          {
-            vId: 'v2',
-            questions: [
-              { dimension: 'observation', text: "偵測器顯示該區域的土壤酸鹼值異常降低。請選出一個最適合的「可驗證科學問題」：", options: ["工廠排放的廢水是否改變了土壤的酸鹼值，進轉影響真菌？", "真菌是不是討厭酸酸的味道？", "森林精靈是不是生氣了？"], correctAnswer: 0, hint: "尋找包含具體測量變因（如酸鹼值）的選項。" },
-              { dimension: 'hypothesis', text: "承上題，請提出你的「科學假設」：", options: ["如果土壤變酸，真菌的發光亮度就會增加。", "如果土壤的pH值低於正常範圍，真菌的生長速度就會減緩。", "酸性土壤會讓真菌瞬間消失。"], correctAnswer: 1, hint: "選擇最符合邏輯且具備因果關係的推論。" }
-            ]
-          },
-          {
-            vId: 'v3',
-            questions: [
-              { dimension: 'observation', text: "你發現只有靠近工廠排氣口的真菌枯萎，遠處的卻很健康。請選出最適合的「可驗證科學問題」：", options: ["真菌枯萎的數量有多少？", "距離工廠排氣口的遠近，是否會影響真菌的生長狀態？", "工廠為什麼要建在這裡？"], correctAnswer: 1, hint: "問題必須能比較不同條件下的差異。" },
-              { dimension: 'hypothesis', text: "承上題，請提出你的「科學假設」：", options: ["距離排氣口越近，真菌的枯萎比例越高。", "排氣口附近的真菌比較脆弱。", "真菌不喜歡工廠的噪音。"], correctAnswer: 0, hint: "假設要有明確的方向性預測。" }
-            ]
-          }
-        ]
-      },
-      {
-        storyId: 't1_s2',
-        title: "任務一：幽靈礦坑的神秘綠光",
-        description: "廢棄百年的礦坑深處，最近每到半夜就會散發出詭異的綠光。當地人傳說是幽靈作祟，請以科學角度進行調查。",
-        variations: [
-          {
-            vId: 'v1',
-            questions: [
-              { dimension: 'observation', text: "你在發光處附近發現了大量不知名的礦物碎屑與水滴。請選出「可驗證科學問題」：", options: ["幽靈喜歡在晚上出來嗎？", "綠光是不是因為水滴造成的？", "該未知礦物接觸水分後，是否會產生發光反應？"], correctAnswer: 2, hint: "將模糊的現象轉化為明確的物理/化學反應問題。" },
-              { dimension: 'hypothesis', text: "承上題，提出你的「科學假設」：", options: ["如果未知礦物接觸到水，就會散發出綠色螢光。", "礦物本身就是綠色的。", "水滴裡面有發光的微生物。"], correctAnswer: 0, hint: "根據上題的變因，建立因果連結。" }
-            ]
-          },
-          {
-            vId: 'v2',
-            questions: [
-              { dimension: 'observation', text: "你注意到綠光只在夜晚氣溫降到 10°C 以下時才會出現。請選出「可驗證科學問題」：", options: ["環境溫度的變化，是否為觸發綠光的關鍵條件？", "幽靈是不是怕熱？", "為什麼綠光只有晚上有？"], correctAnswer: 0, hint: "抓住關鍵變數：「溫度」。" },
-              { dimension: 'hypothesis', text: "承上題，提出你的「科學假設」：", options: ["綠光只有在冬天會有。", "當環境溫度低於 10°C 時，該區域的某種物質會被激發產生螢光。", "氣溫越低，綠光越暗。"], correctAnswer: 1, hint: "將觀察到的溫度條件寫入假設中。" }
-            ]
-          }
-        ]
-      }
-    ];
-
-    const POOL_TYPE_2 = [
-      {
-        storyId: 't2_s1',
-        title: "任務二：沸騰海岸的神秘升溫",
-        description: "海灣海水溫度異常升高，導致魚群遷徙。我們懷疑是海底的未知熱源造成的。請在虛擬實驗室設定模擬參數。",
-        variations: [
-          {
-            vId: 'v1',
-            questions: [
-              { dimension: 'experiment', text: "你想測試「海底熱源溫度」對「海水溫度」的影響。請選出正確的變因設定：", options: ["操縱變因：海水溫度 / 應變變因：水量 / 控制變因：海底熱源", "操縱變因：海底熱源溫度 / 應變變因：海水溫度 / 控制變因：水量、鹽度", "操縱變因：水量 / 應變變因：海底熱源溫度 / 控制變因：海水溫度"], correctAnswer: 1, hint: "操縱變因是你改變的，應變變因是你要觀察的結果。" }
-            ]
-          },
-          {
-            vId: 'v2',
-            questions: [
-              { dimension: 'experiment', text: "如果我們改為懷疑是「海岸工廠的廢水量」導致升溫。請選出正確的變因設定：", options: ["操縱變因：廢水排放量 / 應變變因：海水溫度 / 控制變因：海底熱源溫度、日照", "操縱變因：海水溫度 / 應變變因：廢水排放量 / 控制變因：水質", "操縱變因：日照 / 應變變因：海水溫度 / 控制變因：廢水量"], correctAnswer: 0, hint: "這次你想測試的源頭變成了「廢水量」。" }
-            ]
-          }
-        ]
-      }
-    ];
-
-    const POOL_TYPE_3 = [
-      {
-        storyId: 't3_s1',
-        title: "任務三：齒輪城的酸雨危機",
-        description: "齒輪城的金屬雕像快速腐蝕。請分析特務局收集到的近五年環境數據。",
-        variations: [
-          {
-            vId: 'v1',
-            dataDisplay: [
-              { label: '2021', var1: '100噸', var2: 'pH 5.5' },
-              { label: '2022', var1: '150噸', var2: 'pH 5.0' },
-              { label: '2023', var1: '200噸', var2: 'pH 4.5' },
-              { label: '2024', var1: '250噸', var2: 'pH 4.0' },
-            ],
-            header: ['年份', '燃煤量', '降雨酸鹼值'],
-            questions: [
-              { dimension: 'data', text: "觀察上方數據，燃煤量與降雨酸鹼值(pH)的關係為何？", options: ["正相關 (燃煤越多，pH值數字越大)", "負相關 (燃煤越多，pH值數字越小)", "毫無關聯"], correctAnswer: 1, hint: "當燃煤的數字變大時，pH值的數字是變大還是變小呢？" },
-              { dimension: 'conclusion', text: "請在最終報告中提出最具科學依據的行動建議：", options: ["為所有金屬雕像撐傘。", "舉辦祈雨祭典。", "限制工廠燃煤量，並加裝廢氣過濾系統。"], correctAnswer: 2, hint: "治標不如治本，必須從數據中找出的「源頭」解決。" }
-            ]
-          }
-        ]
-      }
-    ];
-
-    const RadarChart = ({ data }) => {
-      const size = 260; 
-      const center = size / 2;
-      const radius = 80; 
-      const dimensions = ['觀察定題', '假設推論', '實驗設計', '圖表判讀', '結論評估'];
-      const dataKeys = ['observation', 'hypothesis', 'experiment', 'data', 'conclusion'];
-      
-      const getPoint = (value, index, max = 3) => {
-        const angle = (Math.PI * 2 * index) / dimensions.length - Math.PI / 2;
-        const distance = (value / max) * radius;
-        return `${center + distance * Math.cos(angle)},${center + distance * Math.sin(angle)}`;
-      };
-
-      const polygonPoints = dataKeys.map((key, i) => getPoint(data[key] || 0, i)).join(' ');
-      const backgroundPolygons = [1, 2, 3].map(level => dataKeys.map((_, i) => getPoint(level, i, 3)).join(' '));
-
-      return (
-        <svg width={size} height={size} className="mx-auto drop-shadow-lg overflow-visible">
-          {backgroundPolygons.map((points, i) => (
-            <polygon key={i} points={points} fill="none" stroke="#1f2937" strokeWidth="1" />
-          ))}
-          {dataKeys.map((_, i) => (
-            <line key={i} x1={center} y1={center} x2={getPoint(3, i).split(',')[0]} y2={getPoint(3, i).split(',')[1]} stroke="#1f2937" strokeWidth="1" />
-          ))}
-          <polygon points={polygonPoints} fill="rgba(45, 212, 191, 0.5)" stroke="#2dd4bf" strokeWidth="2" />
-          {dataKeys.map((key, i) => {
-            const [x, y] = getPoint(3.7, i).split(',');
+        // ==========================================
+        // 內建 SVG 圖示庫 (取代原先的 lucide-react 套件)
+        // ==========================================
+        const Icon = ({ name, className = "", ...props }) => {
+            const icons = {
+                Shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+                Activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
+                Microscope: <><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></>,
+                BarChart2: <><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></>,
+                CheckCircle: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
+                AlertTriangle: <><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></>,
+                Users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+                Database: <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></>,
+                LogOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>,
+                Play: <polygon points="5 3 19 12 5 21 5 3"/>,
+                User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+                Terminal: <><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></>,
+                Volume2: <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></>,
+                VolumeX: <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" x2="17" y1="9" y2="15"/><line x1="17" x2="23" y1="9" y2="15"/></>,
+                Maximize: <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>,
+                Minimize: <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+            };
             return (
-              <text key={i} x={x} y={y} fill="#94a3b8" fontSize="12" fontWeight="bold" textAnchor="middle" dominantBaseline="middle">{dimensions[i]}</text>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+                    {icons[name]}
+                </svg>
             );
-          })}
-        </svg>
-      );
-    };
-
-    function App() {
-      const [gameState, setGameState] = useState('START');
-      
-      const [playerName, setPlayerName] = useState('');
-      const [activeMissions, setActiveMissions] = useState([]);
-      const [currentMissionIdx, setCurrentMissionIdx] = useState(0);
-      const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
-      
-      const [scores, setScores] = useState({ observation: 0, hypothesis: 0, experiment: 0, data: 0, conclusion: 0 });
-      const [mistakes, setMistakes] = useState(0);
-      const [feedback, setFeedback] = useState(null); 
-
-      const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-      const [passwordInput, setPasswordInput] = useState('');
-      const [passwordError, setPasswordError] = useState(false);
-
-      const bgmRef = useRef(null);
-      const [isBgmPlaying, setIsBgmPlaying] = useState(false);
-      const [isFullscreen, setIsFullscreen] = useState(false);
-
-      useEffect(() => {
-        bgmRef.current = new SciFiBGM();
-
-        const handleFullscreenChange = () => {
-          setIsFullscreen(!!document.fullscreenElement);
         };
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
 
-        return () => {
-          if (bgmRef.current) {
-            bgmRef.current.stop();
-          }
-          document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        };
-      }, []);
+        const Shield = (props) => <Icon name="Shield" {...props} />;
+        const Activity = (props) => <Icon name="Activity" {...props} />;
+        const Microscope = (props) => <Icon name="Microscope" {...props} />;
+        const BarChart2 = (props) => <Icon name="BarChart2" {...props} />;
+        const CheckCircle = (props) => <Icon name="CheckCircle" {...props} />;
+        const AlertTriangle = (props) => <Icon name="AlertTriangle" {...props} />;
+        const Users = (props) => <Icon name="Users" {...props} />;
+        const Database = (props) => <Icon name="Database" {...props} />;
+        const LogOut = (props) => <Icon name="LogOut" {...props} />;
+        const Play = (props) => <Icon name="Play" {...props} />;
+        const User = (props) => <Icon name="User" {...props} />;
+        const Terminal = (props) => <Icon name="Terminal" {...props} />;
+        const Volume2 = (props) => <Icon name="Volume2" {...props} />;
+        const VolumeX = (props) => <Icon name="VolumeX" {...props} />;
+        const Maximize = (props) => <Icon name="Maximize" {...props} />;
+        const Minimize = (props) => <Icon name="Minimize" {...props} />;
 
-      useEffect(() => {
-        if (!bgmRef.current) return;
-        
-        if (gameState === 'PLAYING' || gameState === 'RESULT') {
-          bgmRef.current.setMode('FOCUS');
-        } else {
-          bgmRef.current.setMode('WAR_ROOM');
-        }
-      }, [gameState]);
-
-      const toggleFullscreen = () => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch((err) => {
-            console.error(`無法進入全螢幕模式: ${err.message}`);
-          });
-        } else {
-          if (document.exitFullscreen) {
-            document.exitFullscreen();
-          }
-        }
-      };
-
-      const toggleAudio = () => {
-        if (!bgmRef.current) return;
-        
-        if (isBgmPlaying) {
-          bgmRef.current.stop();
-          setIsBgmPlaying(false);
-        } else {
-          bgmRef.current.play();
-          setIsBgmPlaying(true);
-        }
-      };
-
-      const [classData, setClassData] = useState([
-        { name: "王小明", rank: "B", scores: { observation: 2, hypothesis: 1, experiment: 1, data: 2, conclusion: 2 }, isNew: false },
-        { name: "李華", rank: "A", scores: { observation: 3, hypothesis: 2, experiment: 3, data: 2, conclusion: 3 }, isNew: false },
-      ]);
-
-      const generateMissionRun = () => {
-        const run = [];
-        const pools = [POOL_TYPE_1, POOL_TYPE_2, POOL_TYPE_3];
-        
-        pools.forEach((pool, index) => {
-          const randomStory = pool[Math.floor(Math.random() * pool.length)];
-          const randomVar = randomStory.variations[Math.floor(Math.random() * randomStory.variations.length)];
-          run.push({
-            id: `M${index+1}_${randomStory.storyId}_${randomVar.vId}`,
-            title: randomStory.title,
-            description: randomStory.description,
-            dataDisplay: randomVar.dataDisplay,
-            header: randomVar.header,
-            questions: randomVar.questions
-          });
-        });
-        return run;
-      };
-
-      const initiateAuth = () => {
-        setPlayerName(''); 
-        setGameState('AUTH');
-      };
-
-      const startGame = () => {
-        if (!playerName.trim()) return; 
-
-        setGameState('PLAYING');
-
-        if (!isBgmPlaying && bgmRef.current) {
-          bgmRef.current.setMode('FOCUS'); 
-          bgmRef.current.play();
-          setIsBgmPlaying(true);
-        }
-
-        const newRun = generateMissionRun();
-        setActiveMissions(newRun);
-        
-        setScores({ observation: 0, hypothesis: 0, experiment: 0, data: 0, conclusion: 0 });
-        setCurrentMissionIdx(0);
-        setCurrentQuestionIdx(0);
-        setMistakes(0);
-        setFeedback(null);
-      };
-
-      const currentMission = activeMissions[currentMissionIdx];
-      const currentQuestion = currentMission?.questions[currentQuestionIdx];
-
-      const handleAnswer = (selectedIndex) => {
-        if (selectedIndex === currentQuestion.correctAnswer) {
-          let earnedPoints = 3;
-          if (mistakes === 1) earnedPoints = 2;
-          if (mistakes >= 2) earnedPoints = 1;
-
-          setScores(prev => ({
-            ...prev,
-            [currentQuestion.dimension]: earnedPoints
-          }));
-
-          setFeedback({ type: 'success', text: "正確！特務系統已記錄數據。" });
-          
-          setTimeout(() => {
-            setFeedback(null);
-            setMistakes(0);
-            if (currentQuestionIdx < currentMission.questions.length - 1) {
-              setCurrentQuestionIdx(prev => prev + 1);
-            } else if (currentMissionIdx < activeMissions.length - 1) {
-              setCurrentMissionIdx(prev => prev + 1);
-              setCurrentQuestionIdx(0);
-            } else {
-              setGameState('RESULT');
-            }
-          }, 1500);
-
-        } else {
-          setMistakes(prev => prev + 1);
-          setFeedback({ type: 'error', text: `錯誤！夸克提示：${currentQuestion.hint}` });
-        }
-      };
-
-      const getRank = () => {
-        const total = Object.values(scores).reduce((a, b) => a + b, 0);
-        if (total >= 13) return { rank: 'S', title: '傳奇科學特務', color: 'text-yellow-400' };
-        if (total >= 9) return { rank: 'A', title: '菁英搜查官', color: 'text-purple-400' };
-        return { rank: 'B', title: '前線探勘員', color: 'text-blue-400' };
-      };
-
-      const saveToTeacherData = () => {
-        const playerRank = getRank().rank;
-        setClassData(prev => [
-          ...prev.map(p => ({ ...p, isNew: false })), 
-          { name: playerName.trim() || "未知特務", rank: playerRank, scores: { ...scores }, isNew: true }
-        ]);
-        setGameState('START'); 
-      };
-
-      const handleLogin = () => {
-        if (passwordInput === 'LUTHIAN13') { 
-          setShowPasswordPrompt(false);
-          setPasswordInput('');
-          setPasswordError(false);
-          setGameState('TEACHER');
-        } else {
-          setPasswordError(true);
-        }
-      };
-
-      return (
-        <div className="min-h-screen bg-slate-900 text-slate-200 font-sans selection:bg-teal-500 selection:text-white pb-10 flex flex-col relative">
-          <nav className="bg-slate-800 border-b border-teal-500/30 p-4 flex justify-between items-center shadow-[0_0_15px_rgba(45,212,191,0.1)] sticky top-0 z-40">
-            <div className="flex items-center space-x-3">
-              <i className="fa-solid fa-shield-halved text-teal-400 text-2xl"></i>
-              <span className="text-teal-400 font-bold tracking-widest uppercase hidden sm:inline-block">S.I.A. 科學特務局</span>
-              <span className="text-teal-400 font-bold tracking-widest uppercase sm:hidden">S.I.A.</span>
-            </div>
-            
-            <div className="flex items-center space-x-5">
-              <button 
-                onClick={toggleAudio} 
-                className="text-slate-400 hover:text-teal-400 transition transform hover:scale-110"
-                title={isBgmPlaying ? "關閉音樂" : "播放音樂"}
-              >
-                {isBgmPlaying ? <i className="fa-solid fa-volume-high text-xl"></i> : <i className="fa-solid fa-volume-xmark text-xl"></i>}
-              </button>
-
-              <button 
-                onClick={toggleFullscreen} 
-                className="text-slate-400 hover:text-teal-400 transition transform hover:scale-110"
-                title={isFullscreen ? "退出全螢幕" : "進入全螢幕"}
-              >
-                {isFullscreen ? <i className="fa-solid fa-compress text-xl"></i> : <i className="fa-solid fa-expand text-xl"></i>}
-              </button>
-
-              <div className="w-px h-6 bg-slate-700"></div>
-
-              {gameState !== 'START' && gameState !== 'TEACHER' && (
-                <button onClick={() => setGameState('START')} className="text-sm font-medium text-slate-400 hover:text-orange-400 transition">
-                  <span className="hidden sm:inline">放棄任務 / </span>登出
-                </button>
-              )}
-              {gameState === 'TEACHER' && (
-                <button onClick={() => setGameState('START')} className="flex items-center text-sm font-medium text-teal-400 hover:text-teal-300 transition">
-                  <i className="fa-solid fa-arrow-right-from-bracket mr-2"></i> 返回
-                </button>
-              )}
-            </div>
-          </nav>
-
-          <main className="max-w-4xl w-full mx-auto mt-8 px-4 flex-grow">
-            {gameState === 'START' && (
-              <div className="text-center space-y-8 mt-20">
-                <div className="inline-block p-4 rounded-full bg-teal-500/10 mb-4 shadow-[0_0_30px_rgba(45,212,191,0.2)]">
-                  <i className="fa-solid fa-wave-square text-6xl text-teal-400 animate-pulse"></i>
-                </div>
-                <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-blue-500 drop-shadow-lg tracking-tight">
-                  異象調查專案
-                </h1>
-                <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                  見習特務，新的異常能量反應已經出現。<br/>
-                  總局已將你指派至本次調查任務中，請發揮你的科學探究能力。<br/>
-                  準備好出發了嗎？
-                </p>
+        // ==========================================
+        // 網頁音訊合成器 (雙模式切換：戰情室 x 深度工作)
+        // ==========================================
+        class SciFiBGM {
+            constructor() {
+                this.ctx = null;
+                this.isPlaying = false;
+                this.masterGain = null;
+                this.schedulerTimer = null;
+                this.nextNoteTime = 0;
+                this.currentStep = 0;
+                this.volume = 0.5;
                 
-                <div className="flex justify-center space-x-6 pt-8">
-                  <button 
-                    onClick={initiateAuth}
-                    className="flex items-center px-8 py-4 bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold rounded-lg uppercase tracking-widest shadow-[0_0_20px_rgba(45,212,191,0.4)] transition transform hover:-translate-y-1 whitespace-nowrap"
-                  >
-                    <i className="fa-solid fa-play mr-2"></i> 開始任務
-                  </button>
-                  <button 
-                    onClick={() => setShowPasswordPrompt(true)}
-                    className="px-8 py-4 bg-slate-800 border border-slate-600 hover:border-slate-400 text-slate-300 font-bold rounded-lg uppercase tracking-widest transition whitespace-nowrap"
-                  >
-                    局長戰情室
-                  </button>
-                </div>
+                this.mode = 'WAR_ROOM';
+                this.drones = [];
+                
+                this.warRoomTempo = 115; 
+                this.warRoomSequence = [82.41, 82.41, 98.00, 82.41, 73.42, 82.41, 61.74, 73.42];
 
-                {showPasswordPrompt && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 text-left">
-                    <div className="bg-slate-800 p-8 rounded-xl border border-teal-500/50 shadow-[0_0_30px_rgba(45,212,191,0.2)] max-w-md w-full mx-4">
-                      <h3 className="text-2xl font-bold text-teal-400 mb-4 flex items-center">
-                        <i className="fa-solid fa-shield mr-3 text-xl"></i> 權限驗證
-                      </h3>
-                      <p className="text-slate-400 mb-6 leading-relaxed">
-                        請輸入局長專屬存取密碼以進入戰情室。<br/>
-                        <span className="text-teal-500/80 font-medium">提示：局長大寫英文姓名 + 幸運數字</span>
-                      </p>
-                      <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="w-full bg-slate-900 border border-slate-600 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-teal-400 mb-4" placeholder="輸入密碼..." autoFocus />
-                      {passwordError && <p className="text-orange-400 text-sm mb-4">密碼錯誤，請重新輸入。</p>}
-                      <div className="flex justify-end space-x-4 mt-2">
-                        <button onClick={() => { setShowPasswordPrompt(false); setPasswordInput(''); setPasswordError(false); }} className="px-4 py-2 text-slate-400 hover:text-white transition">取消</button>
-                        <button onClick={handleLogin} className="px-6 py-2 bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold rounded-lg transition">登入</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                this.focusTempo = 70;
+                this.focusSequence = [164.81, 123.47, 196.00, 123.47, 185.00, 123.47, 196.00, 123.47];
+            }
 
-            {gameState === 'AUTH' && (
-              <div className="max-w-md mx-auto mt-20 animate-in fade-in zoom-in duration-300">
-                <div className="bg-slate-800 border border-teal-500/50 rounded-xl p-8 shadow-[0_0_30px_rgba(45,212,191,0.15)] relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-teal-400"></div>
-                  <div className="flex justify-center mb-6 text-teal-400"><i className="fa-solid fa-user-astronaut text-5xl"></i></div>
-                  <h2 className="text-2xl font-bold text-center text-white mb-2 tracking-widest">特務身分核實</h2>
-                  <p className="text-slate-400 text-center text-sm mb-8">總局正在為您建立專屬探勘檔案，請輸入真實姓名。</p>
-                  <div className="space-y-6">
-                    <input 
-                      type="text" 
-                      value={playerName}
-                      onChange={(e) => setPlayerName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && playerName.trim() && startGame()}
-                      className="w-full bg-slate-900 border-2 border-slate-700 text-teal-300 px-4 py-3 rounded-lg focus:outline-none focus:border-teal-400 text-center text-xl font-bold"
-                      placeholder="輸入姓名..."
-                      autoFocus
-                    />
-                    <button 
-                      onClick={startGame}
-                      disabled={!playerName.trim()}
-                      className="w-full py-4 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white font-bold rounded-lg transition tracking-widest flex justify-center items-center shadow-lg"
-                    >
-                      <i className="fa-solid fa-terminal mr-2"></i> 建立檔案並連線
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
 
-            {gameState === 'PLAYING' && currentMission && (
-              <div className="space-y-6 animate-in fade-in duration-500">
-                <div className="flex justify-end">
-                  <div className="bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700 text-sm shadow-md">
-                    <span className="text-slate-400 mr-2">探員:</span><span className="text-teal-400 font-bold">{playerName}</span>
-                  </div>
-                </div>
+            setVolume(newVolume) {
+                this.volume = newVolume;
+                if (this.masterGain && this.ctx) {
+                    this.masterGain.gain.setTargetAtTime(newVolume, this.ctx.currentTime, 0.1);
+                }
+            }
 
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 relative overflow-hidden shadow-lg">
-                  <div className="absolute top-0 left-0 w-2 h-full bg-teal-500"></div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-2xl font-bold text-teal-400 drop-shadow-md">{currentMission.title}</h2>
-                    <span className="text-xs font-bold tracking-wider bg-slate-700 border border-slate-600 text-teal-300 px-3 py-1 rounded-full">任務 {currentMissionIdx + 1} / 3</span>
-                  </div>
-                  <p className="text-slate-300 leading-relaxed mt-4">{currentMission.description}</p>
-                </div>
+            setMode(newMode) {
+                if (this.mode === newMode) return;
+                this.mode = newMode;
+                this.currentStep = 0;
+                if (this.isPlaying) {
+                    this.stopDrones();
+                    this.startDrones();
+                }
+            }
 
-                {currentMission.dataDisplay && (
-                  <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl shadow-inner">
-                    <h3 className="text-sm text-slate-400 mb-3 flex items-center font-bold tracking-wider"><i className="fa-solid fa-database mr-2"></i> 觀測數據中心：</h3>
-                    <div className="overflow-x-auto rounded-lg border border-slate-700">
-                      <table className="w-full text-sm text-left text-slate-300">
-                        <thead className="text-xs text-slate-400 uppercase bg-slate-800 border-b border-slate-700">
-                          <tr>
-                            {currentMission.header.map((th, i) => <th key={i} className="px-4 py-3">{th}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-700/50">
-                          {currentMission.dataDisplay.map((row, idx) => (
-                            <tr key={idx} className="bg-slate-800/30 hover:bg-slate-700/30 transition">
-                              <td className="px-4 py-3 font-medium text-slate-300">{row.label}</td>
-                              <td className="px-4 py-3 font-bold text-orange-400">{row.var1}</td>
-                              <td className="px-4 py-3 font-bold text-teal-400">{row.var2}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+            play() {
+                if (this.isPlaying) return;
+                this.init();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                this.isPlaying = true;
 
-                <div className="bg-slate-800 shadow-xl rounded-xl p-6 border border-slate-700 relative">
-                  <h3 className="text-lg font-semibold mb-6 flex items-start leading-relaxed text-white">
-                    <span className="bg-teal-500/20 text-teal-400 px-2 py-1 rounded mr-3 mt-1 shrink-0"><i className="fa-solid fa-microscope text-sm"></i></span>
-                    {currentQuestion.text}
-                  </h3>
-                  <div className="space-y-3">
-                    {currentQuestion.options.map((opt, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleAnswer(idx)}
-                        disabled={feedback?.type === 'success'}
-                        className="w-full text-left p-4 rounded-lg bg-slate-700/50 hover:bg-slate-600 border border-slate-600 hover:border-teal-400 transition flex items-center disabled:opacity-50 group"
-                      >
-                        <span className="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 group-hover:border-teal-400 text-slate-400 group-hover:text-teal-400 flex items-center justify-center mr-4 font-bold shrink-0 transition">
-                          {String.fromCharCode(65 + idx)}
-                        </span>
-                        <span className="text-slate-200">{opt}</span>
-                      </button>
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = this.volume;
+                this.masterGain.connect(this.ctx.destination);
+
+                this.startDrones();
+
+                this.nextNoteTime = this.ctx.currentTime + 0.1;
+                this.currentStep = 0;
+                this.schedule();
+            }
+
+            startDrones() {
+                if (this.mode === 'WAR_ROOM') {
+                    const padOsc = this.ctx.createOscillator();
+                    padOsc.type = 'sawtooth';
+                    padOsc.frequency.value = 41.20; 
+                    const padFilter = this.ctx.createBiquadFilter();
+                    padFilter.type = 'lowpass';
+                    padFilter.frequency.value = 150; 
+                    
+                    padOsc.connect(padFilter);
+                    padFilter.connect(this.masterGain);
+                    padOsc.start();
+                    this.drones.push(padOsc);
+
+                } else if (this.mode === 'FOCUS') {
+                    const subOsc = this.ctx.createOscillator();
+                    subOsc.type = 'triangle';
+                    subOsc.frequency.value = 41.20; 
+                    const subGain = this.ctx.createGain();
+                    subGain.gain.value = 0.3;
+
+                    const tensionOsc = this.ctx.createOscillator();
+                    tensionOsc.type = 'sine';
+                    tensionOsc.frequency.value = 82.41; 
+                    const tensionGain = this.ctx.createGain();
+                    tensionGain.gain.value = 0.15;
+
+                    const lfo = this.ctx.createOscillator();
+                    lfo.type = 'sine';
+                    lfo.frequency.value = 0.05;
+                    const lfoGain = this.ctx.createGain();
+                    lfoGain.gain.value = 0.2; 
+                    
+                    lfo.connect(lfoGain);
+                    lfoGain.connect(subGain.gain);
+                    lfoGain.connect(tensionGain.gain);
+
+                    subOsc.connect(subGain);
+                    tensionOsc.connect(tensionGain);
+                    subGain.connect(this.masterGain);
+                    tensionGain.connect(this.masterGain);
+
+                    subOsc.start();
+                    tensionOsc.start();
+                    lfo.start();
+                    this.drones.push(subOsc, tensionOsc, lfo);
+                }
+            }
+
+            stopDrones() {
+                this.drones.forEach(node => {
+                    try { node.stop(); } catch(e){}
+                    node.disconnect();
+                });
+                this.drones = [];
+            }
+
+            schedule() {
+                if (!this.isPlaying) return;
+                while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+                    this.playNote(this.nextNoteTime);
+                    this.nextNote();
+                }
+                this.schedulerTimer = setTimeout(() => this.schedule(), 25);
+            }
+
+            nextNote() {
+                const tempo = this.mode === 'WAR_ROOM' ? this.warRoomTempo : this.focusTempo;
+                const stepInterval = this.mode === 'WAR_ROOM' ? 0.25 : 0.5; 
+                
+                const secondsPerBeat = 60.0 / tempo;
+                this.nextNoteTime += stepInterval * secondsPerBeat;
+                
+                const seqLength = this.mode === 'WAR_ROOM' ? this.warRoomSequence.length : this.focusSequence.length;
+                this.currentStep = (this.currentStep + 1) % seqLength;
+            }
+
+            playNote(time) {
+                if (this.mode === 'WAR_ROOM') {
+                    this.playWarRoomNote(time);
+                } else {
+                    this.playFocusNote(time);
+                }
+            }
+
+            playWarRoomNote(time) {
+                const bassOsc = this.ctx.createOscillator();
+                bassOsc.type = 'square'; 
+                bassOsc.frequency.value = this.warRoomSequence[this.currentStep % this.warRoomSequence.length];
+
+                const bassFilter = this.ctx.createBiquadFilter();
+                bassFilter.type = 'lowpass';
+                bassFilter.Q.value = 4; 
+                bassFilter.frequency.setValueAtTime(1000, time);
+                bassFilter.frequency.exponentialRampToValueAtTime(80, time + 0.1);
+
+                const bassGain = this.ctx.createGain();
+                bassGain.gain.setValueAtTime(0.4, time);
+                bassGain.gain.exponentialRampToValueAtTime(0.01, time + 0.12);
+
+                bassOsc.connect(bassFilter);
+                bassFilter.connect(bassGain);
+                bassGain.connect(this.masterGain);
+
+                bassOsc.start(time);
+                bassOsc.stop(time + 0.15);
+
+                if (this.currentStep % 4 === 0) {
+                    const tickOsc = this.ctx.createOscillator();
+                    tickOsc.type = 'sine';
+                    tickOsc.frequency.value = 2500; 
+                    
+                    const tickGain = this.ctx.createGain();
+                    tickGain.gain.setValueAtTime(0.06, time);
+                    tickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+
+                    tickOsc.connect(tickGain);
+                    tickGain.connect(this.masterGain);
+                    
+                    tickOsc.start(time);
+                    tickOsc.stop(time + 0.05);
+                }
+            }
+
+            playFocusNote(time) {
+                const arpOsc = this.ctx.createOscillator();
+                arpOsc.type = 'triangle';
+                arpOsc.frequency.value = this.focusSequence[this.currentStep % this.focusSequence.length];
+
+                const arpFilter = this.ctx.createBiquadFilter();
+                arpFilter.type = 'lowpass';
+                arpFilter.frequency.setValueAtTime(600, time); 
+                arpFilter.frequency.exponentialRampToValueAtTime(150, time + 0.3); 
+
+                const arpGain = this.ctx.createGain();
+                arpGain.gain.setValueAtTime(0, time);
+                arpGain.gain.linearRampToValueAtTime(0.15, time + 0.05); 
+                arpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+
+                arpOsc.connect(arpFilter);
+                arpFilter.connect(arpGain);
+                arpGain.connect(this.masterGain);
+
+                arpOsc.start(time);
+                arpOsc.stop(time + 0.5);
+
+                if (this.currentStep === 0) {
+                    const pingOsc = this.ctx.createOscillator();
+                    pingOsc.type = 'sine';
+                    pingOsc.frequency.value = 1046.50; 
+                    
+                    const pingGain = this.ctx.createGain();
+                    pingGain.gain.setValueAtTime(0.04, time);
+                    pingGain.gain.exponentialRampToValueAtTime(0.0001, time + 1.5); 
+
+                    pingOsc.connect(pingGain);
+                    pingGain.connect(this.masterGain);
+                    
+                    pingOsc.start(time);
+                    pingOsc.stop(time + 1.5);
+                }
+
+                const isDownbeat = (this.currentStep % 2 === 0);
+                const clockOsc = this.ctx.createOscillator();
+                const clockGain = this.ctx.createGain();
+                const clockFilter = this.ctx.createBiquadFilter();
+
+                if (isDownbeat) {
+                    clockOsc.type = 'sine';
+                    clockOsc.frequency.setValueAtTime(80, time);
+                    clockOsc.frequency.exponentialRampToValueAtTime(20, time + 0.15); 
+                    clockGain.gain.setValueAtTime(0.3, time);
+                    clockGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+                    clockFilter.type = 'lowpass';
+                    clockFilter.frequency.value = 150; 
+                } else {
+                    clockOsc.type = 'triangle';
+                    clockOsc.frequency.value = 1200; 
+                    clockGain.gain.setValueAtTime(0.015, time); 
+                    clockGain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
+                    clockFilter.type = 'highpass';
+                    clockFilter.frequency.value = 1500; 
+                }
+
+                clockOsc.connect(clockFilter);
+                clockFilter.connect(clockGain);
+                clockGain.connect(this.masterGain);
+
+                clockOsc.start(time);
+                clockOsc.stop(time + 0.15);
+            }
+
+            stop() {
+                this.isPlaying = false;
+                clearTimeout(this.schedulerTimer);
+                this.stopDrones();
+                if (this.masterGain) {
+                    this.masterGain.disconnect();
+                }
+            }
+        }
+
+        // ==========================================
+        // 題庫系統 (Question Bank System)
+        // ==========================================
+        const POOL_TYPE_1 = [
+            {
+                storyId: 't1_s1',
+                title: "任務一：呢喃森林的枯萎之謎",
+                description: "見習特務，森林裡會發光的奇異真菌突然大面積枯萎，水源看似正常，但附近新建了一座重工業廠。請找出原因。",
+                variations: [
+                    {
+                        vId: 'v1',
+                        questions: [
+                            { dimension: 'observation', text: "現場的樹葉上有一層灰色的粉末。請選出一個最適合的「可驗證科學問題」：", options: ["真菌枯萎的樣子是不是很可憐？", "工廠排放的粉塵是否會遮蔽真菌吸收的光線？", "為什麼最近森林的風景變醜了？"], correctAnswer: 1, hint: "科學問題必須是可以透過實驗來測量或觀察的客觀現象喔！" },
+                            { dimension: 'hypothesis', text: "承上題，請提出你的「科學假設」：", options: ["如果葉片上的粉塵越厚，真菌的存活率就會越低。", "我覺得真菌是因為心情不好才枯萎的。", "工廠廢氣會讓真菌變成紅色。"], correctAnswer: 0, hint: "假設必須是針對問題的一種預測，通常具有「如果...就...」的因果關係。" }
+                        ]
+                    },
+                    {
+                        vId: 'v2',
+                        questions: [
+                            { dimension: 'observation', text: "偵測器顯示該區域的土壤酸鹼值異常降低。請選出一個最適合的「可驗證科學問題」：", options: ["工廠排放的廢水是否改變了土壤的酸鹼值，進轉影響真菌？", "真菌是不是討厭酸酸的味道？", "森林精靈是不是生氣了？"], correctAnswer: 0, hint: "尋找包含具體測量變因（如酸鹼值）的選項。" },
+                            { dimension: 'hypothesis', text: "承上題，請提出你的「科學假設」：", options: ["如果土壤變酸，真菌的發光亮度就會增加。", "如果土壤的pH值低於正常範圍，真菌的生長速度就會減緩。", "酸性土壤會讓真菌瞬間消失。"], correctAnswer: 1, hint: "選擇最符合邏輯且具備因果關係的推論。" }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        const POOL_TYPE_2 = [
+            {
+                storyId: 't2_s1',
+                title: "任務二：沸騰海岸的神秘升溫",
+                description: "海灣海水溫度異常升高，導致魚群遷徙。我們懷疑是海底的未知熱源造成的。請在虛擬實驗室設定模擬參數。",
+                variations: [
+                    {
+                        vId: 'v1',
+                        questions: [
+                            { dimension: 'experiment', text: "你想測試「海底熱源溫度」對「海水溫度」的影響。請選出正確的變因設定：", options: ["操縱變因：海水溫度 / 應變變因：水量 / 控制變因：海底熱源", "操縱變因：海底熱源溫度 / 應變變因：海水溫度 / 控制變因：水量、鹽度", "操縱變因：水量 / 應變變因：海底熱源溫度 / 控制變因：海水溫度"], correctAnswer: 1, hint: "操縱變因是你改變的，應變變因是你要觀察的結果。" }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        const POOL_TYPE_3 = [
+            {
+                storyId: 't3_s1',
+                title: "任務三：齒輪城的酸雨危機",
+                description: "齒輪城的金屬雕像快速腐蝕。請分析特務局收集到的近五年環境數據。",
+                variations: [
+                    {
+                        vId: 'v1',
+                        dataDisplay: [
+                            { label: '2021', var1: '100噸', var2: 'pH 5.5' },
+                            { label: '2022', var1: '150噸', var2: 'pH 5.0' },
+                            { label: '2023', var1: '200噸', var2: 'pH 4.5' },
+                            { label: '2024', var1: '250噸', var2: 'pH 4.0' },
+                        ],
+                        header: ['年份', '燃煤量', '降雨酸鹼值'],
+                        questions: [
+                            { dimension: 'data', text: "觀察上方數據，燃煤量與降雨酸鹼值(pH)的關係為何？", options: ["正相關 (燃煤越多，pH值數字越大)", "負相關 (燃煤越多，pH值數字越小)", "毫無關聯"], correctAnswer: 1, hint: "當燃煤的數字變大時，pH值的數字是變大還是變小呢？" },
+                            { dimension: 'conclusion', text: "請在最終報告中提出最具科學依據的行動建議：", options: ["為所有金屬雕像撐傘。", "舉辦祈雨祭典。", "限制工廠燃煤量，並加裝廢氣過濾系統。"], correctAnswer: 2, hint: "治標不如治本，必須從數據中找出的「源頭」解決。" }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        // ==========================================
+        // 輔助組件：雷達圖
+        // ==========================================
+        const RadarChart = ({ data }) => {
+            const size = 260; 
+            const center = size / 2;
+            const radius = 80; 
+            const dimensions = ['觀察定題', '假設推論', '實驗設計', '圖表判讀', '結論評估'];
+            const dataKeys = ['observation', 'hypothesis', 'experiment', 'data', 'conclusion'];
+            
+            const getPoint = (value, index, max = 3) => {
+                const angle = (Math.PI * 2 * index) / dimensions.length - Math.PI / 2;
+                const distance = (value / max) * radius;
+                return `${center + distance * Math.cos(angle)},${center + distance * Math.sin(angle)}`;
+            };
+
+            const polygonPoints = dataKeys.map((key, i) => getPoint(data[key] || 0, i)).join(' ');
+            const backgroundPolygons = [1, 2, 3].map(level => dataKeys.map((_, i) => getPoint(level, i, 3)).join(' '));
+
+            return (
+                <svg width={size} height={size} className="mx-auto drop-shadow-lg overflow-visible">
+                    {backgroundPolygons.map((points, i) => (
+                        <polygon key={i} points={points} fill="none" stroke="#1f2937" strokeWidth="1" />
                     ))}
-                  </div>
+                    {dataKeys.map((_, i) => (
+                        <line key={i} x1={center} y1={center} x2={getPoint(3, i).split(',')[0]} y2={getPoint(3, i).split(',')[1]} stroke="#1f2937" strokeWidth="1" />
+                    ))}
+                    <polygon points={polygonPoints} fill="rgba(45, 212, 191, 0.5)" stroke="#2dd4bf" strokeWidth="2" />
+                    {dataKeys.map((key, i) => {
+                        const [x, y] = getPoint(3.7, i).split(',');
+                        return (
+                            <text key={i} x={x} y={y} fill="#94a3b8" fontSize="12" fontWeight="bold" textAnchor="middle" dominantBaseline="middle">{dimensions[i]}</text>
+                        );
+                    })}
+                </svg>
+            );
+        };
 
-                  {feedback && (
-                    <div className={`mt-6 p-4 rounded-lg flex items-start border animate-in slide-in-from-bottom-2 ${feedback.type === 'success' ? 'bg-teal-900/30 border-teal-500/50 text-teal-300' : 'bg-orange-900/30 border-orange-500/50 text-orange-300'}`}>
-                      {feedback.type === 'success' ? <i className="fa-solid fa-circle-check text-xl mr-3 shrink-0 mt-0.5"></i> : <i className="fa-solid fa-triangle-exclamation text-xl mr-3 shrink-0 mt-0.5"></i>}
-                      <div><strong>{feedback.type === 'success' ? '正確' : '提示'}</strong>：{feedback.text}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+        // ==========================================
+        // 主程式組件 App
+        // ==========================================
+        function App() {
+            const [gameState, setGameState] = useState('START');
+            
+            const [playerName, setPlayerName] = useState('');
+            const [activeMissions, setActiveMissions] = useState([]);
+            const [currentMissionIdx, setCurrentMissionIdx] = useState(0);
+            const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+            
+            const [scores, setScores] = useState({ observation: 0, hypothesis: 0, experiment: 0, data: 0, conclusion: 0 });
+            const [mistakes, setMistakes] = useState(0);
+            const [feedback, setFeedback] = useState(null); 
 
-            {gameState === 'RESULT' && (
-              <div className="space-y-8 animate-in zoom-in duration-500">
-                <div className="text-center">
-                  <h2 className="text-3xl font-bold text-white mb-2 drop-shadow-md">測驗完成，正在分析數據...</h2>
-                  <p className="text-slate-400">特務局已收到 <span className="text-teal-400 font-bold">{playerName}</span> 的結案報告</p>
-                </div>
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-center shadow-lg relative overflow-hidden">
-                    <div className="absolute -inset-10 bg-gradient-to-br from-teal-500/10 to-blue-500/10 blur-2xl"></div>
-                    <span className="text-slate-400 mb-2 uppercase tracking-widest text-sm relative">評定階級</span>
-                    <div className={`text-8xl font-black mb-4 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] relative ${getRank().color}`}>{getRank().rank}</div>
-                    <h3 className="text-2xl font-bold text-white mb-2 relative">{getRank().title}</h3>
-                  </div>
-                  <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-lg">
-                    <h3 className="text-center font-bold text-teal-400 mb-6 uppercase tracking-wider flex items-center justify-center">
-                      <i className="fa-solid fa-chart-simple mr-2"></i>探究能力雷達圖
-                    </h3>
-                    <RadarChart data={scores} />
-                  </div>
-                </div>
-                <div className="text-center mt-8">
-                  <button onClick={saveToTeacherData} className="px-8 py-4 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg transition tracking-widest shadow-[0_0_20px_rgba(13,148,136,0.3)] hover:scale-105 transform">
-                    上傳特務報告並返回總部
-                  </button>
-                </div>
-              </div>
-            )}
+            const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+            const [passwordInput, setPasswordInput] = useState('');
+            const [passwordError, setPasswordError] = useState(false);
 
-            {gameState === 'TEACHER' && (
-               <div className="space-y-6 animate-in fade-in">
-                 <h2 className="text-3xl font-bold text-teal-400 flex items-center"><i className="fa-solid fa-users mr-3"></i> 局長戰情室</h2>
-                 <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead className="bg-slate-900 border-b border-slate-700 text-slate-300 text-sm uppercase tracking-wider">
-                          <tr>
-                            <th className="px-6 py-4">探員姓名</th>
-                            <th className="px-6 py-4">最終評級</th>
-                            <th className="px-6 py-4">能力分佈 (定題/假設/設計/讀圖/結論)</th>
-                            <th className="px-6 py-4">狀態</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-700/50">
-                          {classData.map((student, i) => (
-                            <tr key={i} className={`hover:bg-slate-700/50 transition ${student.isNew ? 'bg-teal-900/20' : ''}`}>
-                              <td className="px-6 py-4 font-bold text-white">{student.name}</td>
-                              <td className="px-6 py-4"><span className={`font-black text-lg ${student.rank === 'S' ? 'text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.5)]' : student.rank === 'A' ? 'text-purple-400' : 'text-blue-400'}`}>{student.rank}</span></td>
-                              <td className="px-6 py-4 text-sm text-slate-300 font-mono tracking-tight">
-                                {Object.values(student.scores).join(' / ')}
-                              </td>
-                              <td className="px-6 py-4 text-xs font-bold uppercase tracking-wider">
-                                {student.isNew ? <span className="text-teal-400 bg-teal-400/10 px-2 py-1 rounded">剛剛上傳</span> : <span className="text-slate-500">已封存</span>}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                 </div>
-               </div>
-            )}
-          </main>
-        </div>
-      );
-    }
+            const bgmRef = useRef(null);
+            const [isBgmPlaying, setIsBgmPlaying] = useState(false);
+            const [volume, setVolume] = useState(0.5);
+            const [isFullscreen, setIsFullscreen] = useState(false);
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
+            useEffect(() => {
+                bgmRef.current = new SciFiBGM();
+                bgmRef.current.setVolume(volume);
+
+                const handleFullscreenChange = () => {
+                    setIsFullscreen(!!document.fullscreenElement);
+                };
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+                return () => {
+                    if (bgmRef.current) bgmRef.current.stop();
+                    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+                };
+            }, []);
+
+            useEffect(() => {
+                if (!bgmRef.current) return;
+                if (gameState === 'PLAYING' || gameState === 'RESULT') {
+                    bgmRef.current.setMode('FOCUS');
+                } else {
+                    bgmRef.current.setMode('WAR_ROOM');
+                }
+            }, [gameState]);
+
+            const toggleFullscreen = () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch((err) => console.error(err));
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                }
+            };
+
+            const toggleAudio = () => {
+                if (!bgmRef.current) return;
+                if (isBgmPlaying) {
+                    bgmRef.current.stop();
+                    setIsBgmPlaying(false);
+                } else {
+                    bgmRef.current.play();
+                    setIsBgmPlaying(true);
+                }
+            };
+
+            const handleVolumeChange = (e) => {
+                const newVol = parseFloat(e.target.value);
+                setVolume(newVol);
+                if (bgmRef.current) bgmRef.current.setVolume(newVol);
+            };
+
+            const [classData, setClassData] = useState([
+                { name: "王小明", rank: "B", scores: { observation: 2, hypothesis: 1, experiment: 1, data: 2, conclusion: 2 }, isNew: false },
+                { name: "李華", rank: "A", scores: { observation: 3, hypothesis: 2, experiment: 3, data: 2, conclusion: 3 }, isNew: false },
+            ]);
+
+            const generateMissionRun = () => {
+                const run = [];
+                const pools = [POOL_TYPE_1, POOL_TYPE_2, POOL_TYPE_3];
+                pools.forEach((pool, index) => {
+                    const randomStory = pool[Math.floor(Math.random() * pool.length)];
+                    const randomVar = randomStory.variations[Math.floor(Math.random() * randomStory.variations.length)];
+                    run.push({
+                        id: `M${index+1}_${randomStory.storyId}_${randomVar.vId}`,
+                        title: randomStory.title,
+                        description: randomStory.description,
+                        dataDisplay: randomVar.dataDisplay,
+                        header: randomVar.header,
+                        questions: randomVar.questions
+                    });
+                });
+                return run;
+            };
+
+            const initiateAuth = () => {
+                setPlayerName(''); 
+                setGameState('AUTH');
+            };
+
+            const startGame = () => {
+                if (!playerName.trim()) return; 
+                setGameState('PLAYING');
+
+                if (!isBgmPlaying && bgmRef.current) {
+                    bgmRef.current.setMode('FOCUS'); 
+                    bgmRef.current.play();
+                    setIsBgmPlaying(true);
+                }
+
+                const newRun = generateMissionRun();
+                setActiveMissions(newRun);
+                setScores({ observation: 0, hypothesis: 0, experiment: 0, data: 0, conclusion: 0 });
+                setCurrentMissionIdx(0);
+                setCurrentQuestionIdx(0);
+                setMistakes(0);
+                setFeedback(null);
+            };
+
+            const currentMission = activeMissions[currentMissionIdx];
+            const currentQuestion = currentMission?.questions[currentQuestionIdx];
+
+            const handleAnswer = (selectedIndex) => {
+                if (selectedIndex === currentQuestion.correctAnswer) {
+                    let earnedPoints = 3;
+                    if (mistakes === 1) earnedPoints = 2;
+                    if (mistakes >= 2) earnedPoints = 1;
+
+                    setScores(prev => ({ ...prev, [currentQuestion.dimension]: earnedPoints }));
+                    setFeedback({ type: 'success', text: "正確！特務系統已記錄數據。" });
+                    
+                    setTimeout(() => {
+                        setFeedback(null);
+                        setMistakes(0);
+                        if (currentQuestionIdx < currentMission.questions.length - 1) {
+                            setCurrentQuestionIdx(prev => prev + 1);
+                        } else if (currentMissionIdx < activeMissions.length - 1) {
+                            setCurrentMissionIdx(prev => prev + 1);
+                            setCurrentQuestionIdx(0);
+                        } else {
+                            setGameState('RESULT');
+                        }
+                    }, 1500);
+
+                } else {
+                    setMistakes(prev => prev + 1);
+                    setFeedback({ type: 'error', text: `錯誤！夸克提示：${currentQuestion.hint}` });
+                }
+            };
+
+            const getRank = () => {
+                const total = Object.values(scores).reduce((a, b) => a + b, 0);
+                if (total >= 13) return { rank: 'S', title: '傳奇科學特務', color: 'text-yellow-400' };
+                if (total >= 9) return { rank: 'A', title: '菁英搜查官', color: 'text-purple-400' };
+                return { rank: 'B', title: '前線探勘員', color: 'text-blue-400' };
+            };
+
+            const saveToTeacherData = () => {
+                const playerRank = getRank().rank;
+                setClassData(prev => [
+                    ...prev.map(p => ({ ...p, isNew: false })), 
+                    { name: playerName.trim() || "未知特務", rank: playerRank, scores: { ...scores }, isNew: true }
+                ]);
+                setGameState('START'); 
+            };
+
+            const handleLogin = () => {
+                if (passwordInput === 'LUTHIAN13') { 
+                    setShowPasswordPrompt(false);
+                    setPasswordInput('');
+                    setPasswordError(false);
+                    setGameState('TEACHER');
+                } else {
+                    setPasswordError(true);
+                }
+            };
+
+            return (
+                <div className="min-h-screen pb-10 flex flex-col relative w-full h-full">
+                    {/* 頂部導航列 */}
+                    <nav className="bg-slate-800 border-b border-teal-500/30 p-4 flex justify-between items-center shadow-[0_0_15px_rgba(45,212,191,0.1)] sticky top-0 z-40">
+                        <div className="flex items-center space-x-3">
+                            <Shield className="text-teal-400 w-6 h-6" />
+                            <span className="text-teal-400 font-bold tracking-widest uppercase hidden sm:inline-block">S.I.A. 科學特務局</span>
+                            <span className="text-teal-400 font-bold tracking-widest uppercase sm:hidden">S.I.A.</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-5">
+                            {/* 音量控制區塊 */}
+                            <div className="flex items-center space-x-2 group">
+                                <button 
+                                    onClick={toggleAudio} 
+                                    className="text-slate-400 hover:text-teal-400 transition transform hover:scale-110"
+                                    title={isBgmPlaying ? "關閉音樂" : "播放音樂"}
+                                >
+                                    {isBgmPlaying && volume > 0 ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                                </button>
+                                
+                                <input 
+                                    type="range" 
+                                    min="0" max="1" step="0.01" 
+                                    value={volume} 
+                                    onChange={handleVolumeChange} 
+                                    className={`w-16 sm:w-24 h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-teal-400 transition-opacity ${isBgmPlaying ? 'opacity-100' : 'opacity-30'}`}
+                                    title="調整音量"
+                                />
+                            </div>
+
+                            <button onClick={toggleFullscreen} className="text-slate-400 hover:text-teal-400 transition transform hover:scale-110" title={isFullscreen ? "退出全螢幕" : "進入全螢幕"}>
+                                {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                            </button>
+
+                            <div className="w-px h-6 bg-slate-700"></div>
+
+                            {gameState !== 'START' && gameState !== 'TEACHER' && (
+                                <button onClick={() => setGameState('START')} className="text-sm font-medium text-slate-400 hover:text-orange-400 transition">
+                                    <span className="hidden sm:inline">放棄任務 / </span>登出
+                                </button>
+                            )}
+                            {gameState === 'TEACHER' && (
+                                <button onClick={() => setGameState('START')} className="flex items-center text-sm font-medium text-teal-400 hover:text-teal-300 transition">
+                                    <LogOut className="w-4 h-4 mr-2"/> 返回
+                                </button>
+                            )}
+                        </div>
+                    </nav>
+
+                    <main className="max-w-4xl w-full mx-auto mt-8 px-4 flex-grow">
+                        {/* ================= START SCREEN ================= */}
+                        {gameState === 'START' && (
+                            <div className="text-center space-y-8 mt-20 fade-in">
+                                <div className="inline-block p-4 rounded-full bg-teal-500/10 mb-4 shadow-[0_0_30px_rgba(45,212,191,0.2)]">
+                                    <Activity className="w-16 h-16 text-teal-400 animate-pulse" />
+                                </div>
+                                <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-blue-500 drop-shadow-lg tracking-tight">
+                                    異象調查專案
+                                </h1>
+                                <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                                    見習特務，新的異常能量反應已經出現。<br/>
+                                    總局已將你指派至本次調查任務中，請發揮你的科學探究能力。<br/>
+                                    準備好出發了嗎？
+                                </p>
+                                
+                                <div className="flex justify-center space-x-6 pt-8">
+                                    <button onClick={initiateAuth} className="flex items-center px-8 py-4 bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold rounded-lg uppercase tracking-widest shadow-[0_0_20px_rgba(45,212,191,0.4)] transition transform hover:-translate-y-1 whitespace-nowrap">
+                                        <Play className="w-5 h-5 mr-2" /> 開始任務
+                                    </button>
+                                    <button onClick={() => setShowPasswordPrompt(true)} className="px-8 py-4 bg-slate-800 border border-slate-600 hover:border-slate-400 text-slate-300 font-bold rounded-lg uppercase tracking-widest transition whitespace-nowrap">
+                                        局長戰情室
+                                    </button>
+                                </div>
+
+                                {showPasswordPrompt && (
+                                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 text-left fade-in">
+                                        <div className="bg-slate-800 p-8 rounded-xl border border-teal-500/50 shadow-[0_0_30px_rgba(45,212,191,0.2)] max-w-md w-full mx-4 zoom-in">
+                                            <h3 className="text-2xl font-bold text-teal-400 mb-4 flex items-center">
+                                                <Shield className="mr-3 w-6 h-6" /> 權限驗證
+                                            </h3>
+                                            <p className="text-slate-400 mb-6 leading-relaxed">
+                                                正在嘗試存取最高機密資料庫。<br/>
+                                                <span className="text-teal-500/80 font-medium">提示：請輸入特務局長專屬的授權金鑰。</span>
+                                            </p>
+                                            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="w-full bg-slate-900 border border-slate-600 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-teal-400 mb-4" placeholder="輸入金鑰..." autoFocus />
+                                            {passwordError && <p className="text-orange-400 text-sm mb-4">金鑰無效，存取被拒絕。</p>}
+                                            <div className="flex justify-end space-x-4 mt-2">
+                                                <button onClick={() => { setShowPasswordPrompt(false); setPasswordInput(''); setPasswordError(false); }} className="px-4 py-2 text-slate-400 hover:text-white transition">取消</button>
+                                                <button onClick={handleLogin} className="px-6 py-2 bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold rounded-lg transition">解鎖</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ================= AUTH SCREEN ================= */}
+                        {gameState === 'AUTH' && (
+                            <div className="max-w-md mx-auto mt-20 fade-in zoom-in">
+                                <div className="bg-slate-800 border border-teal-500/50 rounded-xl p-8 shadow-[0_0_30px_rgba(45,212,191,0.15)] relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-teal-400"></div>
+                                    <div className="flex justify-center mb-6 text-teal-400"><User className="w-12 h-12" /></div>
+                                    <h2 className="text-2xl font-bold text-center text-white mb-2 tracking-widest">特務身分核實</h2>
+                                    <p className="text-slate-400 text-center text-sm mb-8">總局正在為您建立專屬探勘檔案，請輸入真實姓名。</p>
+                                    <div className="space-y-6">
+                                        <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && playerName.trim() && startGame()} className="w-full bg-slate-900 border-2 border-slate-700 text-teal-300 px-4 py-3 rounded-lg focus:outline-none focus:border-teal-400 text-center text-xl font-bold" placeholder="輸入姓名..." autoFocus />
+                                        <button onClick={startGame} disabled={!playerName.trim()} className="w-full py-4 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white font-bold rounded-lg transition tracking-widest flex justify-center items-center shadow-lg">
+                                            <Terminal className="w-5 h-5 mr-2" /> 建立檔案並連線
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ================= PLAYING SCREEN ================= */}
+                        {gameState === 'PLAYING' && currentMission && (
+                            <div className="space-y-6 fade-in">
+                                <div className="flex justify-end">
+                                    <div className="bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700 text-sm shadow-md">
+                                        <span className="text-slate-400 mr-2">探員:</span><span className="text-teal-400 font-bold">{playerName}</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 relative overflow-hidden shadow-lg">
+                                    <div className="absolute top-0 left-0 w-2 h-full bg-teal-500"></div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h2 className="text-2xl font-bold text-teal-400 drop-shadow-md">{currentMission.title}</h2>
+                                        <span className="text-xs font-bold tracking-wider bg-slate-700 border border-slate-600 text-teal-300 px-3 py-1 rounded-full">任務 {currentMissionIdx + 1} / 3</span>
+                                    </div>
+                                    <p className="text-slate-300 leading-relaxed mt-4">{currentMission.description}</p>
+                                </div>
+
+                                {currentMission.dataDisplay && (
+                                    <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl shadow-inner">
+                                        <h3 className="text-sm text-slate-400 mb-3 flex items-center font-bold tracking-wider"><Database className="w-4 h-4 mr-2"/> 觀測數據中心：</h3>
+                                        <div className="overflow-x-auto rounded-lg border border-slate-700">
+                                            <table className="w-full text-sm text-left text-slate-300">
+                                                <thead className="text-xs text-slate-400 uppercase bg-slate-800 border-b border-slate-700">
+                                                    <tr>{currentMission.header.map((th, i) => <th key={i} className="px-4 py-3">{th}</th>)}</tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-700/50">
+                                                    {currentMission.dataDisplay.map((row, idx) => (
+                                                        <tr key={idx} className="bg-slate-800/30 hover:bg-slate-700/30 transition">
+                                                            <td className="px-4 py-3 font-medium text-slate-300">{row.label}</td>
+                                                            <td className="px-4 py-3 font-bold text-orange-400">{row.var1}</td>
+                                                            <td className="px-4 py-3 font-bold text-teal-400">{row.var2}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="bg-slate-800 shadow-xl rounded-xl p-6 border border-slate-700 relative">
+                                    <h3 className="text-lg font-semibold mb-6 flex items-start leading-relaxed text-white">
+                                        <span className="bg-teal-500/20 text-teal-400 p-1 rounded mr-3 mt-1 shrink-0"><Microscope className="w-5 h-5"/></span>
+                                        {currentQuestion.text}
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {currentQuestion.options.map((opt, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => handleAnswer(idx)}
+                                                disabled={feedback?.type === 'success'}
+                                                className="w-full text-left p-4 rounded-lg bg-slate-700/50 hover:bg-slate-600 border border-slate-600 hover:border-teal-400 transition flex items-center disabled:opacity-50 group"
+                                            >
+                                                <span className="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 group-hover:border-teal-400 text-slate-400 group-hover:text-teal-400 flex items-center justify-center mr-4 font-bold shrink-0 transition">
+                                                    {String.fromCharCode(65 + idx)}
+                                                </span>
+                                                <span className="text-slate-200">{opt}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {feedback && (
+                                        <div className={`mt-6 p-4 rounded-lg flex items-start border slide-in-from-bottom-2 ${feedback.type === 'success' ? 'bg-teal-900/30 border-teal-500/50 text-teal-300' : 'bg-orange-900/30 border-orange-500/50 text-orange-300'}`}>
+                                            {feedback.type === 'success' ? <CheckCircle className="w-6 h-6 mr-3 shrink-0" /> : <AlertTriangle className="w-6 h-6 mr-3 shrink-0" />}
+                                            <div><strong>{feedback.type === 'success' ? '正確' : '提示'}</strong>：{feedback.text}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ================= RESULT SCREEN ================= */}
+                        {gameState === 'RESULT' && (
+                            <div className="space-y-8 zoom-in">
+                                <div className="text-center">
+                                    <h2 className="text-3xl font-bold text-white mb-2 drop-shadow-md">測驗完成，正在分析數據...</h2>
+                                    <p className="text-slate-400">特務局已收到 <span className="text-teal-400 font-bold">{playerName}</span> 的結案報告</p>
+                                </div>
+                                <div className="grid md:grid-cols-2 gap-8">
+                                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-center shadow-lg relative overflow-hidden">
+                                        <div className="absolute -inset-10 bg-gradient-to-br from-teal-500/10 to-blue-500/10 blur-2xl"></div>
+                                        <span className="text-slate-400 mb-2 uppercase tracking-widest text-sm relative">評定階級</span>
+                                        <div className={`text-8xl font-black mb-4 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] relative ${getRank().color}`}>{getRank().rank}</div>
+                                        <h3 className="text-2xl font-bold text-white mb-2 relative">{getRank().title}</h3>
+                                    </div>
+                                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-lg">
+                                        <h3 className="text-center font-bold text-teal-400 mb-6 uppercase tracking-wider flex items-center justify-center">
+                                            <BarChart2 className="w-5 h-5 mr-2" />探究能力雷達圖
+                                        </h3>
+                                        <RadarChart data={scores} />
+                                    </div>
+                                </div>
+                                <div className="text-center mt-8">
+                                    <button onClick={saveToTeacherData} className="px-8 py-4 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg transition tracking-widest shadow-[0_0_20px_rgba(13,148,136,0.3)] hover:scale-105 transform">
+                                        上傳特務報告並返回總部
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ================= TEACHER SCREEN ================= */}
+                        {gameState === 'TEACHER' && (
+                            <div className="space-y-6 fade-in">
+                                <h2 className="text-3xl font-bold text-teal-400 flex items-center"><Users className="mr-3 w-8 h-8"/> 局長戰情室</h2>
+                                <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-900 border-b border-slate-700 text-slate-300 text-sm uppercase tracking-wider">
+                                                <tr>
+                                                    <th className="px-6 py-4">探員姓名</th>
+                                                    <th className="px-6 py-4">最終評級</th>
+                                                    <th className="px-6 py-4">能力分佈 (定題/假設/設計/讀圖/結論)</th>
+                                                    <th className="px-6 py-4">狀態</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-700/50">
+                                                {classData.map((student, i) => (
+                                                    <tr key={i} className={`hover:bg-slate-700/50 transition ${student.isNew ? 'bg-teal-900/20' : ''}`}>
+                                                        <td className="px-6 py-4 font-bold text-white">{student.name}</td>
+                                                        <td className="px-6 py-4"><span className={`font-black text-lg ${student.rank === 'S' ? 'text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.5)]' : student.rank === 'A' ? 'text-purple-400' : 'text-blue-400'}`}>{student.rank}</span></td>
+                                                        <td className="px-6 py-4 text-sm text-slate-300 font-mono tracking-tight">
+                                                            {Object.values(student.scores).join(' / ')}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-xs font-bold uppercase tracking-wider">
+                                                            {student.isNew ? <span className="text-teal-400 bg-teal-400/10 px-2 py-1 rounded">剛剛上傳</span> : <span className="text-slate-500">已封存</span>}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        // 初始化與渲染
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
